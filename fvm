@@ -1,0 +1,6 @@
+#!/bin/sh
+#Fix VirtualBox mouse
+#kills the Vboxclient deamon for drag and drop actions in case the mouse stops working.
+#This will enable mouse input again. Solution taken from this thread: https://forums.virtualbox.org/viewtopic.php?f=3&t=79034
+
+pkill -f "/usr/bin/VBoxClient --draganddrop"
