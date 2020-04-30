@@ -28,7 +28,7 @@ def get_local_ips():
 	all = check_output('ifconfig',shell=True).decode().split('\n\n')[:-1]
 	for interface in all:
 		name = interface.split(':')[0]
-		if name != 'lo':
+		if name != 'lo' and 'inet' in interface:
 			ip = interface.split('inet')[1].split()[0]
 			out.append((name,ip))
 	return out
