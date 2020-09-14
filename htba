@@ -1,0 +1,33 @@
+#!/bin/bash
+#Hack the box attack
+#Automatically setup folders for notetaking, register domain and start basic scan
+
+if [ -z $2 ]
+then
+  echo "htba <boxname> <ipaddr>"
+  exit 1
+fi
+
+boxname=$1
+ipaddr=$2
+workdir="$HOME/HTB/Machines/$boxname"
+
+echo "setting up $workdir"
+
+mkdir -p $workdir
+mkdir -p "$workdir/files"
+mkdir -p "$workdir/scans"
+mkdir -p "$workdir/exploits"
+touch "$workdir/writeup.md"
+
+echo "# $boxname " > "$workdir/writeup.md"
+
+echo "setting hostname in /etc/hosts"
+
+echo  "$ipaddr  $boxname.htb" >> /etc/hosts
+
+echo "initiating nmapscan"
+
+nmap -sV -sC -oN "$workdir/scans/nmap_basic" "$boxname.htb" >/dev/null &
+
+echo "environment ready."
